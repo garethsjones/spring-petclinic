@@ -24,9 +24,15 @@
               <td th:text="${owner.address}"/>
               <td th:text="${owner.city}"/>
               <td th:text="${owner.telephone}"/>
-              <td><span th:each="pet : ${owner.pets}" th:text="${pet.name} "/></td>
+              <td><span th:each="pet : ${owner.pets}" th:text="${pet.name + '&nbsp;'}"/></td>
           </tr>
         </tbody>
+    </table>
+
+    <table class="table-buttons">
+        <tr>
+            <td><a th:href="@{/pets.csv}">Export CSV</a></td>
+        </tr>
     </table>
 
   </body>

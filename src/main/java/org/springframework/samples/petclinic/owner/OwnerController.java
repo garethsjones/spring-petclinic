@@ -15,19 +15,28 @@
  */
 package org.springframework.samples.petclinic.owner;
 
+import com.opencsv.CSVWriter;
+import org.apache.commons.compress.utils.IOUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.WebDataBinder;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.InitBinder;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.ModelAndView;
 
+import javax.servlet.http.HttpServletResponse;
 import javax.validation.Valid;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -39,13 +48,17 @@ import java.util.Map;
 @Controller
 class OwnerController {
 
-    private static final String VIEWS_OWNER_CREATE_OR_UPDATE_FORM = "owners/createOrUpdateOwnerForm";
-    private final OwnerRepository owners;
+    private static final Logger log = LoggerFactory.getLogger(OwnerController.class);
 
+    private static final String VIEWS_OWNER_CREATE_OR_UPDATE_FORM = "owners/createOrUpdateOwnerForm";
+
+    private final OwnerRepository owners;
+    private final JdbcTemplate jdbcTemplate;
 
     @Autowired
-    public OwnerController(OwnerRepository clinicService) {
+    public OwnerController(OwnerRepository clinicService, JdbcTemplate jdbcTemplate) {
         this.owners = clinicService;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @InitBinder
@@ -132,4 +145,62 @@ class OwnerController {
         return mav;
     }
 
+    @RequestMapping(value = "/pets.csv", method = RequestMethod.GET)
+    public void pets(HttpServletResponse response) throws Exception {
+
+        String sql = "" +
+            "SELECT \n" +
+            "    o.first_name,\n" +
+            "    o.last_name,\n" +
+            "    o.address,\n" +
+            "    o.city,\n" +
+            "    o.telephone,\n" +
+            "    p.name AS pet,\n" +
+            "    t.name AS type,\n" +
+            "    p.birth_date\n" +
+            "FROM\n" +
+            "    petclinic.owners o\n" +
+            "JOIN petclinic.pets p ON (p.owner_id = o.id)\n" +
+            "JOIN petclinic.types t ON (p.type_id = t.id)\n" +
+            "ORDER BY o.last_name, o.first_name, o.id";
+
+        List<String[]> rows = jdbcTemplate.query(sql, new Object[]{}, (rs, rowNum) -> {
+
+            List<String> row = new ArrayList<>();
+
+            row.add(rs.getString("first_name"));
+            row.add(rs.getString("last_name"));
+            row.add(rs.getString("address"));
+            row.add(rs.getString("city"));
+            row.add(rs.getString("telephone"));
+            row.add(rs.getString("pet"));
+            row.add(rs.getString("type"));
+            row.add(rs.getString("birth_date"));
+
+            return row.toArray(new String[]{});
+        });
+
+        try (
+            StringWriter writer = new StringWriter();
+
+            CSVWriter csvWriter = new CSVWriter(writer,
+                CSVWriter.DEFAULT_SEPARATOR,
+                CSVWriter.NO_QUOTE_CHARACTER,
+                CSVWriter.DEFAULT_ESCAPE_CHARACTER,
+                CSVWriter.DEFAULT_LINE_END)
+        ) {
+            String[] headerRecord = {"First name", "Last name", "Address", "City", "Telephone", "Pet", "Type", "Pet DoB"};
+            csvWriter.writeNext(headerRecord);
+
+            rows.forEach(csvWriter::writeNext);
+
+            response.setContentType("text/csv");
+            // get your file as InputStream
+            InputStream is = new ByteArrayInputStream(writer.toString().getBytes());
+            // copy it to response's OutputStream
+            IOUtils.copy(is, response.getOutputStream());
+
+            response.flushBuffer();
+        }
+    }
 }
