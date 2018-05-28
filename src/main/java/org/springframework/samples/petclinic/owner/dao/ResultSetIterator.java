@@ -1,4 +1,4 @@
-package org.springframework.samples.petclinic.vet.dao;
+package org.springframework.samples.petclinic.owner.dao;
 
 import org.springframework.jdbc.core.RowMapper;
 

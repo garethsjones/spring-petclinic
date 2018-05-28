@@ -16,12 +16,12 @@
 package org.springframework.samples.petclinic.owner;
 
 import com.opencsv.CSVWriter;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.compress.utils.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.samples.petclinic.vet.dao.PetsDao;
+import org.springframework.samples.petclinic.owner.dao.PetsDao;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -32,15 +32,9 @@ import org.springframework.web.servlet.ModelAndView;
 import javax.servlet.http.HttpServletResponse;
 import javax.validation.Valid;
 import java.io.*;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.*;
-import java.util.function.BiConsumer;
-import java.util.function.BinaryOperator;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-import java.util.function.Supplier;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 /**
@@ -55,6 +49,7 @@ class OwnerController {
     private static final Logger log = LoggerFactory.getLogger(OwnerController.class);
 
     private static final String VIEWS_OWNER_CREATE_OR_UPDATE_FORM = "owners/createOrUpdateOwnerForm";
+    private static final int WAIT = 250;
 
     private final OwnerRepository owners;
     private final PetsDao petsDao;
@@ -163,12 +158,64 @@ class OwnerController {
                 CSVWriter.DEFAULT_ESCAPE_CHARACTER,
                 CSVWriter.DEFAULT_LINE_END)
         ) {
-            String[] headerRecord = {"First name", "Last name", "Address", "City", "Telephone", "Pet", "Type", "Pet DoB"};
+            String[] headerRecord = {"First name", "Last name", "Address", "City", "Telephone", "Pet", "Type", "Pet DoB", "Export date"};
             csvWriter.writeNext(headerRecord);
 
             rows.stream()
-                .map((row) -> row.toArray(new String[]{}))
+                .map((row) -> {
+                    try {
+                        Thread.sleep(WAIT);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    return row.toArray(new String[]{});
+                })
                 .forEach(csvWriter::writeNext);
+
+            response.setContentType("text/csv");
+            InputStream is = new ByteArrayInputStream(writer.toString().getBytes());
+            IOUtils.copy(is, response.getOutputStream());
+
+            response.flushBuffer();
+        }
+    }
+
+    @RequestMapping(value = "/pets-paginated.csv", method = RequestMethod.GET)
+    public void petsPartition(HttpServletResponse response) throws Exception {
+
+        try (
+            StringWriter writer = new StringWriter();
+
+            CSVWriter csvWriter = new CSVWriter(writer,
+                CSVWriter.DEFAULT_SEPARATOR,
+                CSVWriter.NO_QUOTE_CHARACTER,
+                CSVWriter.DEFAULT_ESCAPE_CHARACTER,
+                CSVWriter.DEFAULT_LINE_END)
+        ) {
+            String[] headerRecord = {"First name", "Last name", "Address", "City", "Telephone", "Pet", "Type", "Pet DoB", "Export date"};
+            csvWriter.writeNext(headerRecord);
+
+            final AtomicInteger offset = new AtomicInteger(0);
+
+            do {
+                List<List<String>> rows = petsDao.fetch(1, offset.get());
+
+                rows.stream()
+                    .map((row) -> {
+                        offset.incrementAndGet();
+                        try {
+                            Thread.sleep(WAIT);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                        return row.toArray(new String[]{});
+                    })
+                    .forEach(csvWriter::writeNext);
+
+                if (CollectionUtils.isEmpty(rows)) {
+                    break;
+                }
+            } while (true);
 
             response.setContentType("text/csv");
             InputStream is = new ByteArrayInputStream(writer.toString().getBytes());
@@ -181,15 +228,41 @@ class OwnerController {
     @RequestMapping(value = "/pets-stream.csv", method = RequestMethod.GET)
     public void petsStream(HttpServletResponse response) throws Exception {
 
-        Long count = petsDao.stream(logRow, Collectors.counting());
+        try (
+            StringWriter writer = new StringWriter();
 
+            CSVWriter csvWriter = new CSVWriter(writer,
+                CSVWriter.DEFAULT_SEPARATOR,
+                CSVWriter.NO_QUOTE_CHARACTER,
+                CSVWriter.DEFAULT_ESCAPE_CHARACTER,
+                CSVWriter.DEFAULT_LINE_END)
+        ) {
+            String[] headerRecord = {"First name", "Last name", "Address", "City", "Telephone", "Pet", "Type", "Pet DoB", "Export date"};
+            csvWriter.writeNext(headerRecord);
+
+            petsDao.stream(writeRowFunction(csvWriter), Collectors.counting());
+
+            response.setContentType("text/csv");
+            InputStream is = new ByteArrayInputStream(writer.toString().getBytes());
+            IOUtils.copy(is, response.getOutputStream());
+
+            response.flushBuffer();
+        }
     }
 
-    private Function<List<String>, Integer> logRow = (row) -> {
+    private Function<List<String>, Integer> writeRowFunction(CSVWriter csvWriter) {
 
-        log.info(row.toString());
+        return (row) -> {
 
-        return 1;
+            try {
+                Thread.sleep(WAIT);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
 
-    };
+            csvWriter.writeNext(row.toArray(new String[]{}));
+
+            return 1;
+        };
+    }
 }
