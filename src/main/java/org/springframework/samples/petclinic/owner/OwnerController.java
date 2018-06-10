@@ -36,6 +36,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * @author Juergen Hoeller
@@ -147,8 +148,6 @@ class OwnerController {
     @RequestMapping(value = "/pets.csv", method = RequestMethod.GET)
     public void pets(HttpServletResponse response) throws Exception {
 
-        List<List<String>> rows = petsDao.fetch();
-
         try (
             StringWriter writer = new StringWriter();
 
@@ -160,6 +159,8 @@ class OwnerController {
         ) {
             String[] headerRecord = {"First name", "Last name", "Address", "City", "Telephone", "Pet", "Type", "Pet DoB", "Export date"};
             csvWriter.writeNext(headerRecord);
+
+            List<List<String>> rows = petsDao.fetch();
 
             rows.stream()
                 .map((row) -> {
@@ -264,5 +265,31 @@ class OwnerController {
 
             return 1;
         };
+    }
+
+    @RequestMapping(value = "/pets-broken.csv", method = RequestMethod.GET)
+    public void petsBroken(HttpServletResponse response) throws Exception {
+
+        try (
+            StringWriter writer = new StringWriter();
+
+            CSVWriter csvWriter = new CSVWriter(writer,
+                CSVWriter.DEFAULT_SEPARATOR,
+                CSVWriter.NO_QUOTE_CHARACTER,
+                CSVWriter.DEFAULT_ESCAPE_CHARACTER,
+                CSVWriter.DEFAULT_LINE_END)
+        ) {
+            String[] headerRecord = {"First name", "Last name", "Address", "City", "Telephone", "Pet", "Type", "Pet DoB", "Export date"};
+            csvWriter.writeNext(headerRecord);
+
+            petsDao.fetchStream()
+                .map(writeRowFunction(csvWriter));
+
+            response.setContentType("text/csv");
+            InputStream is = new ByteArrayInputStream(writer.toString().getBytes());
+            IOUtils.copy(is, response.getOutputStream());
+
+            response.flushBuffer();
+        }
     }
 }

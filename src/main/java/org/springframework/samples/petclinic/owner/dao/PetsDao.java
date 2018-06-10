@@ -1,5 +1,7 @@
 package org.springframework.samples.petclinic.owner.dao;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -9,9 +11,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collector;
+import java.util.stream.Stream;
 
 @Component
 public class PetsDao {
+
+    private static final Logger log = LoggerFactory.getLogger(PetsDao.class);
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -75,5 +80,10 @@ public class PetsDao {
         ResultSetCollector<List<String>, F, D> resultSetCollector = new ResultSetCollector<>(ROW_MAPPER, operation, collector);
 
         return jdbcTemplate.query(SQL, new Object[]{}, resultSetCollector);
+    }
+
+    public Stream<List<String>> fetchStream() {
+
+        return jdbcTemplate.query(SQL, new Object[]{}, new ResultSetStreamer(ROW_MAPPER));
     }
 }
