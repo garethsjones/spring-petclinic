@@ -12,13 +12,13 @@ import java.util.Spliterator;
 import java.util.function.Function;
 import java.util.stream.Collector;
 
-public class ResultSetCollector<A, B, C> implements ResultSetExtractor<C> {
+public class ResultSetProcessor<A, B, C> implements ResultSetExtractor<C> {
 
     private final RowMapper<A> rowMapper;
     private final Function<A, B> operation;
     private final Collector<B, ?, C> collector;
 
-    public ResultSetCollector(RowMapper<A> rowMapper, Function<A, B> operation, Collector<B, ?, C> collector) {
+    public ResultSetProcessor(RowMapper<A> rowMapper, Function<A, B> operation, Collector<B, ?, C> collector) {
         this.rowMapper = rowMapper;
         this.operation = operation;
         this.collector = collector;

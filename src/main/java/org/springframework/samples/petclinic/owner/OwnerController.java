@@ -145,42 +145,6 @@ class OwnerController {
         return mav;
     }
 
-    @RequestMapping(value = "/pets.csv", method = RequestMethod.GET)
-    public void pets(HttpServletResponse response) throws Exception {
-
-        try (
-            StringWriter writer = new StringWriter();
-
-            CSVWriter csvWriter = new CSVWriter(writer,
-                CSVWriter.DEFAULT_SEPARATOR,
-                CSVWriter.NO_QUOTE_CHARACTER,
-                CSVWriter.DEFAULT_ESCAPE_CHARACTER,
-                CSVWriter.DEFAULT_LINE_END)
-        ) {
-            String[] headerRecord = {"First name", "Last name", "Address", "City", "Telephone", "Pet", "Type", "Pet DoB", "Export date"};
-            csvWriter.writeNext(headerRecord);
-
-            List<List<String>> rows = petsDao.fetch();
-
-            rows.stream()
-                .map((row) -> {
-                    try {
-                        Thread.sleep(WAIT);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                    return row.toArray(new String[]{});
-                })
-                .forEach(csvWriter::writeNext);
-
-            response.setContentType("text/csv");
-            InputStream is = new ByteArrayInputStream(writer.toString().getBytes());
-            IOUtils.copy(is, response.getOutputStream());
-
-            response.flushBuffer();
-        }
-    }
-
     @RequestMapping(value = "/pets-paginated.csv", method = RequestMethod.GET)
     public void petsPartition(HttpServletResponse response) throws Exception {
 
@@ -226,6 +190,42 @@ class OwnerController {
         }
     }
 
+    @RequestMapping(value = "/pets.csv", method = RequestMethod.GET)
+    public void pets(HttpServletResponse response) throws Exception {
+
+        try (
+            StringWriter writer = new StringWriter();
+
+            CSVWriter csvWriter = new CSVWriter(writer,
+                CSVWriter.DEFAULT_SEPARATOR,
+                CSVWriter.NO_QUOTE_CHARACTER,
+                CSVWriter.DEFAULT_ESCAPE_CHARACTER,
+                CSVWriter.DEFAULT_LINE_END)
+        ) {
+            String[] headerRecord = {"First name", "Last name", "Address", "City", "Telephone", "Pet", "Type", "Pet DoB", "Export date"};
+            csvWriter.writeNext(headerRecord);
+
+            List<List<String>> rows = petsDao.fetch();
+
+            rows.stream()
+                .map((row) -> {
+                    try {
+                        Thread.sleep(WAIT);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    return row.toArray(new String[]{});
+                })
+                .forEach(csvWriter::writeNext);
+
+            response.setContentType("text/csv");
+            InputStream is = new ByteArrayInputStream(writer.toString().getBytes());
+            IOUtils.copy(is, response.getOutputStream());
+
+            response.flushBuffer();
+        }
+    }
+
     @RequestMapping(value = "/pets-stream.csv", method = RequestMethod.GET)
     public void petsStream(HttpServletResponse response) throws Exception {
 
@@ -249,22 +249,6 @@ class OwnerController {
 
             response.flushBuffer();
         }
-    }
-
-    private Function<List<String>, Integer> writeRowFunction(CSVWriter csvWriter) {
-
-        return (row) -> {
-
-            try {
-                Thread.sleep(WAIT);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-
-            csvWriter.writeNext(row.toArray(new String[]{}));
-
-            return 1;
-        };
     }
 
     @RequestMapping(value = "/pets-broken.csv", method = RequestMethod.GET)
@@ -291,5 +275,21 @@ class OwnerController {
 
             response.flushBuffer();
         }
+    }
+
+    private Function<List<String>, Integer> writeRowFunction(CSVWriter csvWriter) {
+
+        return (row) -> {
+
+            try {
+                Thread.sleep(WAIT);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            csvWriter.writeNext(row.toArray(new String[]{}));
+
+            return 1;
+        };
     }
 }

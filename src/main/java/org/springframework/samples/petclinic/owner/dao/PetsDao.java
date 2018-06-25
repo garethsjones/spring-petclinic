@@ -5,13 +5,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.support.rowset.ResultSetWrappingSqlRowSet;
+import org.springframework.jdbc.support.rowset.SqlRowSet;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collector;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 @Component
 public class PetsDao {
@@ -57,6 +59,7 @@ public class PetsDao {
     @Autowired
     public PetsDao(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
+        this.jdbcTemplate.setFetchSize(Integer.MIN_VALUE);
     }
 
     public List<List<String>> fetch() {
@@ -77,13 +80,45 @@ public class PetsDao {
 
     public <F, D> D stream(Function<List<String>, F> operation, Collector<F, ?, D> collector) {
 
-        ResultSetCollector<List<String>, F, D> resultSetCollector = new ResultSetCollector<>(ROW_MAPPER, operation, collector);
+        ResultSetProcessor<List<String>, F, D> resultSetProcessor = new ResultSetProcessor<>(ROW_MAPPER, operation, collector);
 
-        return jdbcTemplate.query(SQL, new Object[]{}, resultSetCollector);
+        return jdbcTemplate.query(SQL, new Object[]{}, resultSetProcessor);
     }
 
     public Stream<List<String>> fetchStream() {
 
         return jdbcTemplate.query(SQL, new Object[]{}, new ResultSetStreamer(ROW_MAPPER));
+    }
+
+    private <T> T streamQuery(String sql, Function<Stream<SqlRowSet>, ? extends T> streamer, Object... args) {
+        return jdbcTemplate.query(sql, resultSet -> {
+            final SqlRowSet rowSet = new ResultSetWrappingSqlRowSet(resultSet);
+            final boolean parallel = false;
+
+            // The ResultSet API has a slight impedance mismatch with Iterators, so this conditional
+            // simply returns an empty iterator if there are no results
+            if (!rowSet.next()) {
+                return streamer.apply(StreamSupport.stream(Spliterators.emptySpliterator(), parallel));
+            }
+
+            Spliterator<SqlRowSet> spliterator = Spliterators.spliteratorUnknownSize(new Iterator<SqlRowSet>() {
+                private boolean first = true;
+
+                @Override
+                public boolean hasNext() {
+                    return !rowSet.isLast();
+                }
+
+                @Override
+                public SqlRowSet next() {
+                    if (!first || !rowSet.next()) {
+                        throw new NoSuchElementException();
+                    }
+                    first = false; // iterators can be unwieldy sometimes
+                    return rowSet;
+                }
+            }, Spliterator.IMMUTABLE);
+            return streamer.apply(StreamSupport.stream(spliterator, parallel));
+        }, args);
     }
 }
